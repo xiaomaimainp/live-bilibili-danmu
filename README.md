@@ -28,7 +28,7 @@
 
 1. 运行脚本:
    ```
-   python send_live_danmaku.py
+   python send_live_danmu.py
    ```
 
 ## 如何获取B站Cookie信息
