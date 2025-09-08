@@ -19,8 +19,8 @@
 
 2. 修改 [config.json] ./config.json) 文件中的配置参数:  
    - `room_ids`: 直播间ID列表，支持多个直播间就是           
-   - https://live.bilibili.com/yyyyyyyy ?   https://live.bilibili.com/xxxxxxxx 
-   - 比如"room_ids": [yyyyyyyy、,xxxxxxxx] 直播间ID之间用逗号隔开
+   - https://live.bilibili.com/yyyyyyyy 和 https://live.bilibili.com/xxxxxxxx 
+   - 比如"room_ids": [yyyyyyyy,xxxxxxxx] 直播间ID之间用逗号隔开
    - `message`: 要发送的弹幕内容
    - `csrf`: B站账户的bili_jct值
    - `sessdata`: B站账户的SESSDATA值
