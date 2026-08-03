@@ -1,0 +1,15 @@
+# 敏感配置文件（含账号 Cookie，切勿提交）
+config.json
+
+# Python 缓存
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# 日志文件
+*.log
