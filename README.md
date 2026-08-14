@@ -22,9 +22,11 @@
    pip install -r requirements.txt
    ```
 
-2. 准备配置文件：
-   - 复制模板 `config.example.json` 为 `config.json`
-   - 修改 `config.json` 中的配置参数：
+2. 准备配置文件（可选，可跳过）：
+   - 不手动创建也行：直接运行脚本，若 `config.json` 不存在会**自动生成默认模板**，
+     并提示你粘贴 Cookie 以填充凭据（见第 4 步）。
+   - 也可以手动准备：复制模板 `config.example.json` 为 `config.json`，
+     修改其中的配置参数：
 
    | 字段 | 说明 |
    | --- | --- |
@@ -46,11 +48,23 @@
    python bili_danmu.py -c /path/to/your/config.json
    ```
 
-4. （可选）使用环境变量传入敏感凭据，避免把 Cookie 写进 `config.json`：
+4. 凭据自动获取（运行时交互）：
+   当 `config.json` 中的 `csrf` / `sessdata` 仍为空或保留默认占位符时，
+   运行脚本会自动提示你粘贴浏览器整段 Cookie，程序解析出 `bili_jct` 和 `SESSDATA`
+   后自动写回 `config.json`（其余配置不动），随后继续发送弹幕。例如：
+   ```
+   未检测到有效的 csrf / sessdata。
+   请粘贴浏览器复制的整段 Cookie（形如 SESSDATA=xxx; bili_jct=yyy; ...）：
+   Cookie> <在此粘贴整段 Cookie>
+   ```
+   > 程序会自动对 `SESSDATA` 做 URL 解码（`%2C`→`,` 等），无需手动处理。
+   > 凭据已写入配置后，再次运行不会再提示。
+
+5. （可选）使用环境变量传入敏感凭据，避免把 Cookie 写进 `config.json`：
    ```
    set BILI_CSRF=你的bili_jct
    set BILI_SESSDATA=你的SESSDATA
-   python send_live_danmaku.py
+   python bili_danmu.py
    ```
    （环境变量优先级高于 `config.json` 中的值）
 
@@ -59,15 +73,17 @@
 要使用此工具，您需要获取B站账户的Cookie信息，包括`bili_jct`和`SESSDATA`：
 
 1. 打开浏览器并登录您的B站账户
-2. 进入任意B站页面，按F12打开开发者工具
+2. 进入任意B站直播间，按F12打开开发者工具
 3. 在开发者工具中找到"Application"（应用程序）或"Storage"（存储）选项卡
-4. 在左侧的"Storage"部分找到"Cookies"，然后点击`https://www.bilibili.com`
-5. 在右侧的Cookie列表中找到以下两个值并复制：
+4. 在左侧的"Storage" 部分找到"Cookies"，然后点击 `https://live.bilibili.com`
+5. 复制整段 Cookie（包含 `SESSDATA`、`bili_jct` 等所有字段），在脚本提示时直接粘贴即可；
+   或仅复制以下两个值手动填入 `config.json`：
    - `bili_jct` 对应配置文件中的 `csrf`
    - `SESSDATA` 对应配置文件中的 `sessdata`
 
 注意：这些Cookie值是您账户的敏感信息，请妥善保管，不要泄露给他人。
 仓库已通过 `.gitignore` 忽略 `config.json`，请勿手动将其提交到公开仓库。
+`SESSDATA` 为登录态，过期后将 `config.json` 中的凭据改回占位符（或清空），重新运行脚本按提示粘贴 Cookie 更新即可。
 
 ## 依赖组件
 

@@ -5,6 +5,7 @@ import os
 import random
 import sys
 import time
+import urllib.parse
 
 import requests
 
@@ -36,8 +37,81 @@ def load_config(config_path):
 
     # 环境变量优先级高于配置文件，避免把敏感凭据写进 git
     config["csrf"] = os.environ.get("BILI_CSRF", config.get("csrf"))
-    config["sessdata"] = os.environ.get("BILI_SESSDATA", config.get("sessdata"))
+    sessdata = os.environ.get("BILI_SESSDATA", config.get("sessdata"))
+    # SESSDATA 可能以 URL 编码形式（%2C/%2A）保存，统一解码为真实字符
+    config["sessdata"] = urllib.parse.unquote(sessdata) if sessdata else sessdata
     return config
+
+
+def default_config():
+    """返回一份默认配置模板。"""
+    return {
+        "room_ids": [0, 0],
+        "message": "自己手动输入",
+        "csrf": "替换为你的bili_jct",
+        "sessdata": "替换为你的SESSDATA",
+        "interval": 20,
+        "jitter": 5,
+    }
+
+
+def ensure_config(config_path):
+    """配置不存在时按默认模板创建，返回加载后的配置。"""
+    if not os.path.exists(config_path):
+        logger.warning("配置文件 %s 不存在，已创建默认模板，请按提示填写凭据", config_path)
+        save_config(default_config(), config_path)
+    return load_config(config_path)
+
+
+def save_config(config, config_path):
+    """将配置写入文件（不存在则创建），失败时返回 False。"""
+    try:
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)
+        logger.info("配置已写入: %s", config_path)
+        return True
+    except Exception as e:
+        logger.error("写入配置文件失败 %s: %s", config_path, e)
+        return False
+
+
+def parse_cookie_string(cookie_str):
+    """
+    从整段 Cookie 字符串中解析出 SESSDATA 与 bili_jct(csrF)。
+    支持两种格式：
+      - 分号分隔:  SESSDATA=xxx; bili_jct=yyy; ...
+      - Netscape 文本: 每行 domain\tflag\tpath\tsecure\texp\tname\tvalue
+    返回 {'csrf': ..., 'sessdata': ...}，缺失的字段为 None。
+    """
+    cookie_str = (cookie_str or "").strip()
+    if not cookie_str:
+        return {"csrf": None, "sessdata": None}
+
+    found = {"SESSDATA": None, "bili_jct": None}
+
+    # 优先按分号分隔解析
+    if ";" in cookie_str or "=" in cookie_str and "\t" not in cookie_str:
+        for part in cookie_str.split(";"):
+            if "=" not in part:
+                continue
+            k, v = part.split("=", 1)
+            k, v = k.strip(), v.strip()
+            if k in found:
+                found[k] = v
+
+    # 兼容 Netscape cookie 文本格式（按行，末两列为 name/value）
+    if found["SESSDATA"] is None or found["bili_jct"] is None:
+        for line in cookie_str.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            cols = line.split("\t")
+            if len(cols) >= 7:
+                name, value = cols[-2], cols[-1]
+                if name in found:
+                    found[name] = value
+
+    return {"csrf": found["bili_jct"], "sessdata": found["SESSDATA"]}
 
 
 def validate_config(config):
@@ -89,8 +163,10 @@ def build_session(csrf, sessdata):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         "Referer": "https://live.bilibili.com/",
-        "Cookie": f"bili_jct={csrf}; SESSDATA={sessdata}",
     })
+    # 用 cookies.set 而非手动拼字符串，避免 sessdata 含逗号时被截断
+    session.cookies.set("bili_jct", csrf, domain=".bilibili.com")
+    session.cookies.set("SESSDATA", sessdata, domain=".bilibili.com")
     return session
 
 
@@ -174,11 +250,53 @@ def parse_args():
     return parser.parse_args()
 
 
+# 占位符/空值均视为未配置凭据
+CREDENTIAL_PLACEHOLDERS = {"", "替换为你的bili_jct", "替换为你的SESSDATA"}
+
+
+def credentials_missing(config):
+    """csrf 或 sessdata 为空或仍为默认占位符时返回 True。"""
+    csrf = (config.get("csrf") or "").strip()
+    sessdata = (config.get("sessdata") or "").strip()
+    return csrf in CREDENTIAL_PLACEHOLDERS or sessdata in CREDENTIAL_PLACEHOLDERS
+
+
+def prompt_and_save_cookies(config, config_path):
+    """
+    交互式要求粘贴浏览器整段 Cookie，解析出 csrf/sessdata 后写回配置。
+    返回更新后的 config；解析失败或用户跳过则返回原 config。
+    """
+    print("未检测到有效的 csrf / sessdata。")
+    print("请粘贴浏览器复制的整段 Cookie（形如 SESSDATA=xxx; bili_jct=yyy; ...）：")
+    try:
+        cookie_input = input("Cookie> ").strip()
+    except EOFError:
+        logger.error("未读取到输入，仍以占位符运行（发送会失败）")
+        return config
+
+    creds = parse_cookie_string(cookie_input)
+    if not creds["csrf"] or not creds["sessdata"]:
+        logger.error("未能解析出 SESSDATA / bili_jct，请确认复制完整")
+        return config
+
+    config["csrf"] = creds["csrf"]
+    config["sessdata"] = creds["sessdata"]
+    if not save_config(config, config_path):
+        return config
+    logger.info("csrf / sessdata 已自动写入配置，请妥善保管 config.json")
+    return config
+
+
 def main():
     args = parse_args()
-    config = load_config(args.config)
+
+    config = ensure_config(args.config)
     if not config:
         sys.exit(1)
+
+    # 凭据缺失时交互式获取并写回，其余配置保持不动
+    if credentials_missing(config):
+        config = prompt_and_save_cookies(config, args.config)
 
     room_ids = validate_config(config)
     if not room_ids:

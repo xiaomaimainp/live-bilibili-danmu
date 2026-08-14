@@ -1,8 +1,0 @@
-{
-    "room_ids": [0, 0],
-    "message": "自己手动输入",
-    "csrf": "替换为你的bili_jct",
-    "sessdata": "替换为你的SESSDATA",
-    "interval": 20,
-    "jitter": 5
-}
