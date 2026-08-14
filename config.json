@@ -1,7 +1,8 @@
 {
-    "room_ids": [1111111,000000],
+    "room_ids": [0, 0],
     "message": "自己手动输入",
-    "csrf": "123456",
-    "sessdata": "21323124124128041280471294791274912878",
-    "interval": 20
+    "csrf": "替换为你的bili_jct",
+    "sessdata": "替换为你的SESSDATA",
+    "interval": 20,
+    "jitter": 5
 }

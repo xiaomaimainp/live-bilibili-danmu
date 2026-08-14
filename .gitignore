@@ -5,7 +5,7 @@ config.json
 __pycache__/
 *.pyc
 .pytest_cache/
-
+.vscode/
 # 虚拟环境
 venv/
 .venv/
